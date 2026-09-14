@@ -50,7 +50,8 @@ function CommentSection() {
 
       const callbackCode = new URLSearchParams(window.location.search).get('code')
       if (!currentSession && callbackCode) {
-        const { data: exchangeData } = await supabase.auth.exchangeCodeForSession(callbackCode)
+        const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(callbackCode)
+        if (exchangeError) throw exchangeError
         currentSession = exchangeData.session
         window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
       }
