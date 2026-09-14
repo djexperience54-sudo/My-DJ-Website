@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { apiUrl } from '../lib/api'
-import EmailVerificationFields from './EmailVerificationFields'
 
 const initialForm = {
   name: '',
@@ -17,8 +16,6 @@ function BookingForm() {
   const [successMessage, setSuccessMessage] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [verificationToken, setVerificationToken] = useState('')
-  const [isEmailVerified, setIsEmailVerified] = useState(false)
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -26,8 +23,6 @@ function BookingForm() {
     setSubmitted(false)
     setSuccessMessage('')
     setError('')
-    setVerificationToken('')
-    setIsEmailVerified(false)
   }
 
   async function handleSubmit(event) {
@@ -39,11 +34,6 @@ function BookingForm() {
 
     setIsSubmitting(true)
     setError('')
-    if (!isEmailVerified || !verificationToken) {
-      setError('Verify your email before sending the booking enquiry.')
-      setIsSubmitting(false)
-      return
-    }
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs)
 
@@ -51,7 +41,7 @@ function BookingForm() {
       const response = await fetch(apiUrl('/api/bookings'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, verificationToken }),
+        body: JSON.stringify(form),
         signal: controller.signal
       })
 
@@ -64,8 +54,6 @@ function BookingForm() {
       setSubmitted(true)
       setSuccessMessage(result.message || 'Your message has been sent successfully. I will reply within 24 hours.')
       setForm(initialForm)
-      setVerificationToken('')
-      setIsEmailVerified(false)
     } catch (submissionError) {
       setError(submissionError.name === 'AbortError' ? 'The server took too long to respond. Please try again.' : submissionError.message)
     } finally {
@@ -80,7 +68,6 @@ function BookingForm() {
         Name
         <input name="name" value={form.name} onChange={handleChange} required />
       </label>
-      <EmailVerificationFields email={form.email} purpose="booking" token={verificationToken} onTokenChange={setVerificationToken} onVerified={setIsEmailVerified} />
       <label>
         Email
         <input name="email" type="email" value={form.email} onChange={handleChange} required />
@@ -93,7 +80,7 @@ function BookingForm() {
         Message
         <textarea name="message" value={form.message} onChange={handleChange} rows="4" required />
       </label>
-      <button type="submit" disabled={isSubmitting || !isEmailVerified}>
+      <button type="submit" disabled={isSubmitting}>
         {isSubmitting ? 'Sending...' : 'Send booking enquiry'}
       </button>
       {submitted && (

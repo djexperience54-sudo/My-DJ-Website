@@ -148,18 +148,6 @@ app.get('/sitemap.xml', asyncRoute(async (request, response) => {
 app.post('/api/bookings', asyncRoute(async (request, response) => {
   try {
     const payload = sanitizeBookingPayload(request.body)
-    const verification = await getEmailVerification(request.body.verificationToken, payload.email, 'booking')
-    if (!verification) {
-      return response.status(400).json({ error: 'Verify your email before sending the booking enquiry.' })
-    }
-    const booking = await createBooking({
-      name: payload.name,
-      email: payload.email,
-      event_type: payload.eventType,
-      message: payload.message
-    })
-    await deleteEmailVerification(verification.token)
-
     const recipient = process.env.SMTP_TO || 'djexperience54@gmail.com'
     const emailPayload = {
       to: recipient,
@@ -170,14 +158,11 @@ app.post('/api/bookings', asyncRoute(async (request, response) => {
       message: payload.message
     }
 
-    sendBookingEmail(emailPayload).catch((emailError) => {
-      console.error('Booking email delivery failed:', emailError.message)
-    })
+    await sendBookingEmail(emailPayload)
 
     response.status(201).json({
       success: true,
-      message: 'Your booking request was saved successfully. I will reply within 24 hours.',
-      data: booking
+      message: 'Your booking request has been sent to INT\'L DJ EXPERIENCE. I will reply within 24 hours.'
     })
   } catch (error) {
     response.status(400).json({ error: publicSubmissionError(error, 'Your booking could not be submitted. Please try again.') })
