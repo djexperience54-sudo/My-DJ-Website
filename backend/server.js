@@ -165,7 +165,13 @@ app.post('/api/bookings', asyncRoute(async (request, response) => {
       message: 'Your booking request has been sent to INT\'L DJ EXPERIENCE. I will reply within 24 hours.'
     })
   } catch (error) {
-    response.status(400).json({ error: publicSubmissionError(error, 'Your booking could not be submitted. Please try again.') })
+    console.error('Booking delivery failed:', error.message)
+    const isEmailFailure = /SMTP|email|timed out|authentication|connection|recipient/i.test(error.message || '')
+    response.status(isEmailFailure ? 503 : 400).json({
+      error: isEmailFailure
+        ? 'The booking email service is unavailable right now. Please try again later.'
+        : publicSubmissionError(error, 'Your booking could not be submitted. Please try again.')
+    })
   }
 }))
 

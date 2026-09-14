@@ -319,11 +319,14 @@ function getVideoEmbedUrl(videoUrl) {
 
 function ScrollHintButton() {
   const [isAtTop, setIsAtTop] = useState(true)
+  const [scrollProgress, setScrollProgress] = useState(0)
 
   useEffect(() => {
     function handleScroll() {
       const distanceFromBottom = document.documentElement.scrollHeight - (window.innerHeight + window.scrollY)
       setIsAtTop(distanceFromBottom < 120 && window.scrollY < 120)
+      const scrollableHeight = document.documentElement.scrollHeight - window.innerHeight
+      setScrollProgress(scrollableHeight > 0 ? Math.min(100, Math.round((window.scrollY / scrollableHeight) * 100)) : 0)
     }
 
     handleScroll()
@@ -341,7 +344,7 @@ function ScrollHintButton() {
   }
 
   return (
-    <button type="button" className="scroll-hint-button" onClick={handleScrollAction} aria-label={isAtTop ? 'Scroll to bottom' : 'Scroll to top'}>
+    <button type="button" className="scroll-hint-button" style={{ '--scroll-progress': `${scrollProgress}%` }} onClick={handleScrollAction} aria-label={isAtTop ? 'Scroll to bottom' : 'Scroll to top'}>
       {isAtTop ? '↓' : '↑'}
     </button>
   )
