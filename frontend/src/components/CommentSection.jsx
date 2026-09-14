@@ -1,6 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { apiUrl } from '../lib/api'
-import { getSupabaseClient } from '../lib/supabaseClient'
 
 const initialForm = {
   name: '',
@@ -14,14 +13,9 @@ function CommentSection() {
   const [form, setForm] = useState(initialForm)
   const [comments, setComments] = useState([])
   const [replies, setReplies] = useState({})
-  const [user, setUser] = useState(null)
-  const [session, setSession] = useState(null)
-  const [isAuthReady, setIsAuthReady] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const submitCommentRef = useRef(null)
-  const hasResumedPendingComment = useRef(false)
 
   useEffect(() => {
     fetch(apiUrl('/api/comments'))
@@ -39,62 +33,6 @@ function CommentSection() {
     })
   }, [comments])
 
-  useEffect(() => {
-    const supabase = getSupabaseClient()
-    let isMounted = true
-
-    async function restoreSession() {
-      let currentSession
-      const { data: sessionData } = await supabase.auth.getSession()
-      currentSession = sessionData.session
-
-      const callbackCode = new URLSearchParams(window.location.search).get('code')
-      if (!currentSession && callbackCode) {
-        const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(callbackCode)
-        if (exchangeError) throw exchangeError
-        currentSession = exchangeData.session
-        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
-      }
-
-      if (!isMounted) return
-      setSession(currentSession ?? null)
-      setUser(currentSession?.user ?? null)
-      setIsAuthReady(true)
-    }
-
-    restoreSession().catch(() => {
-      if (isMounted) setIsAuthReady(true)
-    })
-
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (!isMounted) return
-      setSession(nextSession ?? null)
-      setUser(nextSession?.user ?? null)
-      setIsAuthReady(true)
-    })
-
-    return () => {
-      isMounted = false
-      listener.subscription.unsubscribe()
-    }
-  }, [])
-
-  useEffect(() => {
-    const savedComment = window.localStorage.getItem('pending-comment')
-    if (!isAuthReady || !session || !savedComment || isSubmitting || hasResumedPendingComment.current) return
-
-    let pendingComment
-    try {
-      pendingComment = JSON.parse(savedComment)
-    } catch {
-      window.localStorage.removeItem('pending-comment')
-      return
-    }
-
-    hasResumedPendingComment.current = true
-    setTimeout(() => submitCommentRef.current?.(pendingComment, session.access_token), 0)
-  }, [isAuthReady, session, isSubmitting])
-
   function handleChange(event) {
     const { name, value } = event.target
     setForm((currentForm) => ({ ...currentForm, [name]: value }))
@@ -102,29 +40,16 @@ function CommentSection() {
     setError('')
   }
 
-  async function signInWithGoogle() {
-    const { error: signInError } = await getSupabaseClient().auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin }
-    })
-    if (signInError) setError('We could not connect your account. Please try again.')
-  }
-
-  async function submitComment(commentForm, accessToken = session?.access_token) {
+  async function submitComment(commentForm) {
     setIsSubmitting(true)
     setError('')
-    if (!accessToken) {
-      setError('Your account session is not ready yet. Please try again.')
-      setIsSubmitting(false)
-      return
-    }
     const controller = new AbortController()
     const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs)
 
     try {
       const response = await fetch(apiUrl('/api/comments'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(commentForm),
         signal: controller.signal
       })
@@ -147,34 +72,17 @@ function CommentSection() {
     }
   }
 
-  useEffect(() => {
-    submitCommentRef.current = submitComment
-  })
-
   async function handleSubmit(event) {
     event.preventDefault()
 
     if (!event.currentTarget.checkValidity()) return
 
-    if (!session) {
-      window.localStorage.setItem('pending-comment', JSON.stringify(form))
-      await signInWithGoogle()
-      return
-    }
-
-    await submitComment(form, session.access_token)
+    await submitComment(form)
   }
 
   async function handleLike(commentId) {
-    if (!user) {
-      setError('Sign in is needed to like comments.')
-      return
-    }
-    const { data: sessionData } = await getSupabaseClient().auth.getSession()
-    const accessToken = sessionData.session?.access_token
     const response = await fetch(apiUrl(`/api/comments/${commentId}/like`), {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` }
+      method: 'POST'
     })
     const result = await response.json().catch(() => ({}))
     if (!response.ok) {
@@ -185,11 +93,10 @@ function CommentSection() {
   }
 
   async function handleReply(commentId, message) {
-    if (!user || !message.trim()) return
-    const { data: sessionData } = await getSupabaseClient().auth.getSession()
+    if (!message.trim()) return
     const response = await fetch(apiUrl(`/api/comments/${commentId}/replies`), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token || ''}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message })
     })
     const result = await response.json().catch(() => ({}))
@@ -244,7 +151,7 @@ function CommentSection() {
               <p>{comment.message}</p>
               <button type="button" className="comment-like-button" onClick={() => handleLike(comment.id)}>Like ({comment.likes || 0})</button>
               {(replies[comment.id] || []).map((reply) => <p className="public-reply" key={reply.id}><strong>{reply.name}:</strong> {reply.message}</p>)}
-              {user && <form className="comment-reply-form" onSubmit={(event) => { event.preventDefault(); handleReply(comment.id, event.currentTarget.elements.reply.value); event.currentTarget.reset() }}><input name="reply" placeholder="Write a reply" maxLength="1000" required /><button type="submit">Reply</button></form>}
+              <form className="comment-reply-form" onSubmit={(event) => { event.preventDefault(); handleReply(comment.id, event.currentTarget.elements.reply.value); event.currentTarget.reset() }}><input name="reply" placeholder="Write a reply" maxLength="1000" required /><button type="submit">Reply</button></form>
             </article>
           ))}
         </div>

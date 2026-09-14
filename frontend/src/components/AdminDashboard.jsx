@@ -707,6 +707,21 @@ function AdminDashboard({ user, onSignOut }) {
     setCounts((currentCounts) => ({ ...currentCounts, site_videos: Math.max(0, (currentCounts.site_videos ?? 0) - 1) }))
   }
 
+  async function handleCommentDelete(id) {
+    if (!window.confirm('Delete this comment from the public site?')) return
+    const { data: sessionData } = await getSupabaseClient().auth.getSession()
+    const accessToken = sessionData.session?.access_token
+    const response = await fetch(`${import.meta.env.VITE_API_URL || 'https://my-dj-website.onrender.com'}/api/comments/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+    if (!response.ok) {
+      setError('The comment could not be deleted.')
+      return
+    }
+    setComments((currentComments) => currentComments.filter((comment) => comment.id !== id))
+  }
+
   async function handleBookingStatusChange(id, status) {
     setError('')
 
@@ -905,6 +920,7 @@ function AdminDashboard({ user, onSignOut }) {
                 <strong>{comment.name} - {comment.mood}</strong>
                 <a href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(comment.email)}&su=${encodeURIComponent(`Re: Your comment on INT'L DJ EXPERIENCE`)}&body=${encodeURIComponent(`Hi ${comment.name},\n\nThank you for your comment.\n\n`)}`} target="_blank" rel="noreferrer">Reply in Gmail</a>
                 <p>{comment.message}</p>
+                              <button type="button" onClick={() => handleCommentDelete(comment.id)}>Delete comment</button>
               </div>
               <small>{new Date(comment.created_at).toLocaleString()}</small>
             </article>
