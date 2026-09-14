@@ -3,7 +3,7 @@ require('dotenv').config()
 const express = require('express')
 const cors = require('cors')
 const helmet = require('helmet')
-const { createBooking, createComment, createEmailVerification, deleteEmailVerification, getAuthenticatedUser, getEmailVerification, getLatestEmailVerification, getEvents, getGalleryItems, getMixtapes, getPublicComments, getPublicSiteContent, getSitemapContent, toggleCommentLike } = require('./database')
+const { createBooking, createComment, createCommentReply, createEmailVerification, deleteEmailVerification, getAuthenticatedUser, getEmailVerification, getLatestEmailVerification, getEvents, getGalleryItems, getMixtapes, getPublicComments, getPublicReplies, getPublicSiteContent, getSitemapContent, toggleCommentLike } = require('./database')
 const { createUploadSignature, isConfigured: isCloudinaryConfigured } = require('./cloudinary')
 const { sendBookingEmail, sendCommentEmail, sendVerificationCode } = require('./email')
 const crypto = require('crypto')
@@ -225,6 +225,22 @@ app.post('/api/comments/:id/like', asyncRoute(async (request, response) => {
   const commentId = Number(request.params.id)
   if (!Number.isInteger(commentId)) return response.status(400).json({ error: 'That comment is not available.' })
   response.json({ data: await toggleCommentLike(commentId, user.id) })
+}))
+
+app.get('/api/comments/:id/replies', asyncRoute(async (request, response) => {
+  response.json({ data: await getPublicReplies(Number(request.params.id)) })
+}))
+
+app.post('/api/comments/:id/replies', asyncRoute(async (request, response) => {
+  const authorization = request.headers.authorization || ''
+  const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
+  if (!accessToken) return response.status(401).json({ error: 'Sign in is needed to reply.' })
+  const user = await getAuthenticatedUser(accessToken)
+  const message = typeof request.body.message === 'string' ? request.body.message.trim() : ''
+  if (!message || message.length > 1000) return response.status(400).json({ error: 'Enter a reply of 1,000 characters or fewer.' })
+  const metadata = user.user_metadata || {}
+  const name = metadata.full_name || metadata.name || user.email?.split('@')[0] || 'Google user'
+  response.status(201).json({ data: await createCommentReply({ comment_id: Number(request.params.id), user_id: user.id, name, message }) })
 }))
 
 app.post('/api/media/signature', asyncRoute(async (request, response) => {

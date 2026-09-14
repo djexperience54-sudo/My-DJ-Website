@@ -13,6 +13,7 @@ const requestTimeoutMs = 20000
 function CommentSection() {
   const [form, setForm] = useState(initialForm)
   const [comments, setComments] = useState([])
+  const [replies, setReplies] = useState({})
   const [user, setUser] = useState(null)
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -24,6 +25,30 @@ function CommentSection() {
       .then((result) => setComments(result.data || []))
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    comments.forEach((comment) => {
+      fetch(apiUrl(`/api/comments/${comment.id}/replies`))
+        .then((response) => response.ok ? response.json() : Promise.reject(new Error('Replies could not be loaded.')))
+        .then((result) => setReplies((currentReplies) => ({ ...currentReplies, [comment.id]: result.data || [] })))
+        .catch(() => {})
+    })
+  }, [comments])
+
+  useEffect(() => {
+    const savedComment = window.localStorage.getItem('pending-comment')
+    if (!user || !savedComment) return
+
+    let pendingComment
+    try {
+      pendingComment = JSON.parse(savedComment)
+    } catch {
+      window.localStorage.removeItem('pending-comment')
+      return
+    }
+    window.localStorage.removeItem('pending-comment')
+    setTimeout(() => submitComment(pendingComment), 0)
+  }, [user])
   useEffect(() => {
     const supabase = getSupabaseClient()
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
@@ -39,32 +64,20 @@ function CommentSection() {
   }
 
   async function signInWithGoogle() {
-    setError('')
     const { error: signInError } = await getSupabaseClient().auth.signInWithOAuth({
       provider: 'google',
       options: { redirectTo: window.location.origin }
     })
-    if (signInError) setError('Google sign-in is not available right now. Please try again.')
+    if (signInError) setError('We could not connect your account. Please try again.')
   }
 
-  async function handleSubmit(event) {
-    event.preventDefault()
-
-    if (!event.currentTarget.checkValidity()) {
-      return
-    }
-
-    if (!user) {
-      setError('Sign in with Google before posting a comment.')
-      return
-    }
-
+  async function submitComment(commentForm) {
     setIsSubmitting(true)
     setError('')
     const { data: sessionData } = await getSupabaseClient().auth.getSession()
     const accessToken = sessionData.session?.access_token
     if (!accessToken) {
-      setError('Your Google session expired. Please sign in again.')
+      setError('Your account session expired. Please try again.')
       setIsSubmitting(false)
       return
     }
@@ -75,7 +88,7 @@ function CommentSection() {
       const response = await fetch(apiUrl('/api/comments'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify(form),
+        body: JSON.stringify(commentForm),
         signal: controller.signal
       })
 
@@ -96,9 +109,23 @@ function CommentSection() {
     }
   }
 
+  async function handleSubmit(event) {
+    event.preventDefault()
+
+    if (!event.currentTarget.checkValidity()) return
+
+    if (!user) {
+      window.localStorage.setItem('pending-comment', JSON.stringify(form))
+      await signInWithGoogle()
+      return
+    }
+
+    await submitComment(form, user)
+  }
+
   async function handleLike(commentId) {
     if (!user) {
-      setError('Sign in with Google to like comments.')
+      setError('Sign in is needed to like comments.')
       return
     }
     const { data: sessionData } = await getSupabaseClient().auth.getSession()
@@ -115,6 +142,22 @@ function CommentSection() {
     setComments((currentComments) => currentComments.map((comment) => comment.id === commentId ? { ...comment, likes: result.data.likes } : comment))
   }
 
+  async function handleReply(commentId, message) {
+    if (!user || !message.trim()) return
+    const { data: sessionData } = await getSupabaseClient().auth.getSession()
+    const response = await fetch(apiUrl(`/api/comments/${commentId}/replies`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${sessionData.session?.access_token || ''}` },
+      body: JSON.stringify({ message })
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      setError(result.error || 'That reply could not be posted.')
+      return
+    }
+    setReplies((currentReplies) => ({ ...currentReplies, [commentId]: [...(currentReplies[commentId] || []), result.data] }))
+  }
+
   return (
     <section className="comment-section" aria-labelledby="comments-title">
       <div className="site-container comment-layout">
@@ -124,12 +167,6 @@ function CommentSection() {
         </div>
 
         <form className="comment-form" onSubmit={handleSubmit}>
-          {!user ? (
-            <button type="button" onClick={signInWithGoogle}>Sign in with Google to comment</button>
-          ) : (
-            <p className="comment-signed-in">Commenting as {user.user_metadata?.full_name || user.user_metadata?.name || user.email}</p>
-          )}
-
           <label>
             How did it feel?
             <select name="mood" value={form.mood} onChange={handleChange}>
@@ -144,7 +181,7 @@ function CommentSection() {
             <textarea name="message" value={form.message} onChange={handleChange} rows="4" placeholder="Tell us about the mixtape, the vibe, or the night..." required />
           </label>
 
-          <button type="submit" disabled={isSubmitting || !user}>
+          <button type="submit" disabled={isSubmitting}>
             {isSubmitting ? 'Posting...' : 'Send comment'}
           </button>
 
@@ -164,6 +201,8 @@ function CommentSection() {
               <span>{comment.mood}</span>
               <p>{comment.message}</p>
               <button type="button" className="comment-like-button" onClick={() => handleLike(comment.id)}>Like ({comment.likes || 0})</button>
+              {(replies[comment.id] || []).map((reply) => <p className="public-reply" key={reply.id}><strong>{reply.name}:</strong> {reply.message}</p>)}
+              {user && <form className="comment-reply-form" onSubmit={(event) => { event.preventDefault(); handleReply(comment.id, event.currentTarget.elements.reply.value); event.currentTarget.reset() }}><input name="reply" placeholder="Write a reply" maxLength="1000" required /><button type="submit">Reply</button></form>}
             </article>
           ))}
         </div>

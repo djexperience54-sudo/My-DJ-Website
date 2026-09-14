@@ -78,6 +78,18 @@ async function toggleCommentLike(commentId, userId) {
   return { liked: !existing, likes: count ?? 0 }
 }
 
+async function getPublicReplies(commentId) {
+  const { data, error } = await supabase.from('comment_replies').select('id, comment_id, name, message, created_at').eq('comment_id', commentId).order('created_at', { ascending: true })
+  if (error) throw error
+  return data
+}
+
+async function createCommentReply(reply) {
+  const { data, error } = await supabase.from('comment_replies').insert(reply).select('id, comment_id, name, message, created_at').single()
+  if (error) throw new Error(formatSupabaseError(error, 'Comment reply'))
+  return data
+}
+
 async function getSitemapContent() {
   const [mixtapes] = await Promise.all([
     supabase.from('mixtapes').select('id, created_at').order('created_at', { ascending: false }),
@@ -188,4 +200,4 @@ async function deleteEmailVerification(token) {
   if (error) throw new Error(formatSupabaseError(error, 'Email verification'))
 }
 
-module.exports = { createBooking, createComment, createEmailVerification, deleteEmailVerification, formatSupabaseError, getAuthenticatedUser, getEmailVerification, getLatestEmailVerification, getEvents, getGalleryItems, getMixtapes, getPublicComments, getPublicSiteContent, getSitemapContent, toggleCommentLike }
+module.exports = { createBooking, createComment, createCommentReply, createEmailVerification, deleteEmailVerification, formatSupabaseError, getAuthenticatedUser, getEmailVerification, getLatestEmailVerification, getEvents, getGalleryItems, getMixtapes, getPublicComments, getPublicReplies, getPublicSiteContent, getSitemapContent, toggleCommentLike }
