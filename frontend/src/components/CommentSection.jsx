@@ -26,7 +26,10 @@ function CommentSection() {
   }, [])
 
   useEffect(() => {
-    getSupabaseClient().auth.getSession().then(({ data }) => setProfile(data.session ?? null)).catch(() => {})
+    const supabase = getSupabaseClient()
+    supabase.auth.getSession().then(({ data }) => setProfile(data.session ?? null)).catch(() => {})
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setProfile(session ?? null))
+    return () => listener.subscription.unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -52,9 +55,11 @@ function CommentSection() {
     const timeoutId = window.setTimeout(() => controller.abort(), requestTimeoutMs)
 
     try {
+      const { data: sessionData } = await getSupabaseClient().auth.getSession()
+      const currentSession = sessionData.session ?? profile
       const response = await fetch(apiUrl('/api/comments'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(profile ? { Authorization: `Bearer ${profile.access_token}` } : {}) },
+        headers: { 'Content-Type': 'application/json', ...(currentSession ? { Authorization: `Bearer ${currentSession.access_token}` } : {}) },
         body: JSON.stringify(commentForm),
         signal: controller.signal
       })
