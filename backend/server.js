@@ -186,8 +186,11 @@ app.post('/api/bookings', asyncRoute(async (request, response) => {
 
 app.post('/api/comments', asyncRoute(async (request, response) => {
   try {
-    const payload = sanitizeCommentPayload(request.body)
-    const comment = await createComment(payload)
+    const accessToken = (request.headers.authorization || '').startsWith('Bearer ') ? request.headers.authorization.slice(7) : ''
+    const user = accessToken ? await getAuthenticatedUser(accessToken) : null
+    const metadata = user?.user_metadata || {}
+    const payload = sanitizeCommentPayload({ ...request.body, name: metadata.full_name || metadata.name || user?.email?.split('@')[0] || 'Guest' })
+    const comment = await createComment({ ...payload, email: user?.email || null, avatar_url: metadata.avatar_url || null })
 
     sendCommentEmail({
         to: process.env.SMTP_TO || 'djexperience54@gmail.com',
@@ -210,17 +213,18 @@ app.post('/api/comments', asyncRoute(async (request, response) => {
 }))
 
 app.post('/api/comments/:id/like', asyncRoute(async (request, response) => {
-  app.delete('/api/comments/:id', asyncRoute(async (request, response) => {
-    const authorization = request.headers.authorization || ''
-    const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
-    if (!accessToken) return response.status(401).json({ error: 'Administrator access is required.' })
-    const user = await getAuthenticatedUser(accessToken)
-    await deleteComment(Number(request.params.id), user.id)
-    response.status(204).end()
-  }))
   const commentId = Number(request.params.id)
   if (!Number.isInteger(commentId)) return response.status(400).json({ error: 'That comment is not available.' })
   response.json({ data: await toggleCommentLike(commentId) })
+}))
+
+app.delete('/api/comments/:id', asyncRoute(async (request, response) => {
+  const authorization = request.headers.authorization || ''
+  const accessToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : ''
+  if (!accessToken) return response.status(401).json({ error: 'Administrator access is required.' })
+  const user = await getAuthenticatedUser(accessToken)
+  await deleteComment(Number(request.params.id), user.id)
+  response.status(204).end()
 }))
 
 app.get('/api/comments/:id/replies', asyncRoute(async (request, response) => {
@@ -230,7 +234,10 @@ app.get('/api/comments/:id/replies', asyncRoute(async (request, response) => {
 app.post('/api/comments/:id/replies', asyncRoute(async (request, response) => {
   const message = typeof request.body.message === 'string' ? request.body.message.trim() : ''
   if (!message || message.length > 1000) return response.status(400).json({ error: 'Enter a reply of 1,000 characters or fewer.' })
-  response.status(201).json({ data: await createCommentReply({ comment_id: Number(request.params.id), name: 'Listener', message }) })
+  const accessToken = (request.headers.authorization || '').startsWith('Bearer ') ? request.headers.authorization.slice(7) : ''
+  const user = accessToken ? await getAuthenticatedUser(accessToken) : null
+  const metadata = user?.user_metadata || {}
+  response.status(201).json({ data: await createCommentReply({ comment_id: Number(request.params.id), name: metadata.full_name || metadata.name || user?.email?.split('@')[0] || 'Guest', avatar_url: metadata.avatar_url || null, message }) })
 }))
 
 app.post('/api/media/signature', asyncRoute(async (request, response) => {

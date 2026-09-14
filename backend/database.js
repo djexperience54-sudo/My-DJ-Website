@@ -46,7 +46,7 @@ function getGalleryItems() {
 async function getPublicComments() {
   const { data, error } = await supabase
     .from('comments')
-    .select('id, name, mood, message, likes, created_at')
+    .select('id, name, avatar_url, message, likes, created_at')
     .order('likes', { ascending: false })
     .order('created_at', { ascending: false })
     .limit(50)
@@ -65,13 +65,13 @@ async function toggleCommentLike(commentId) {
 }
 
 async function getPublicReplies(commentId) {
-  const { data, error } = await supabase.from('comment_replies').select('id, comment_id, name, message, created_at').eq('comment_id', commentId).order('created_at', { ascending: true })
+  const { data, error } = await supabase.from('comment_replies').select('id, comment_id, name, avatar_url, message, created_at').eq('comment_id', commentId).order('created_at', { ascending: true })
   if (error) throw error
   return data
 }
 
 async function createCommentReply(reply) {
-  const { data, error } = await supabase.from('comment_replies').insert(reply).select('id, comment_id, name, message, created_at').single()
+  const { data, error } = await supabase.from('comment_replies').insert(reply).select('id, comment_id, name, avatar_url, message, created_at').single()
   if (error) throw new Error(formatSupabaseError(error, 'Comment reply'))
   return data
 }

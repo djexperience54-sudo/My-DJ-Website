@@ -917,7 +917,7 @@ function AdminDashboard({ user, onSignOut }) {
           {comments.map((comment) => (
             <article className="admin-booking-row" key={comment.id}>
               <div>
-                <strong>{comment.name} - {comment.mood}</strong>
+                <strong>{comment.name}</strong>
                 <a href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(comment.email)}&su=${encodeURIComponent(`Re: Your comment on INT'L DJ EXPERIENCE`)}&body=${encodeURIComponent(`Hi ${comment.name},\n\nThank you for your comment.\n\n`)}`} target="_blank" rel="noreferrer">Reply in Gmail</a>
                 <p>{comment.message}</p>
                               <button type="button" onClick={() => handleCommentDelete(comment.id)}>Delete comment</button>

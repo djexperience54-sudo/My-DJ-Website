@@ -1602,6 +1602,18 @@ h1 {
   font-size: 12px;
 }
 
+.comment-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.comment-identity-note {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
 .comment-composer-footer {
   display: flex;
   align-items: end;

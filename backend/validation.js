@@ -31,9 +31,8 @@ function sanitizeBookingPayload(payload = {}) {
 
 function sanitizeCommentPayload(payload = {}) {
   const name = normalizeText(payload.name || 'Guest', 'Name', 120)
-  const mood = ['good', 'bad', 'neutral'].includes(payload.mood) ? payload.mood : 'neutral'
   const message = normalizeText(payload.message, 'Message', 1000)
-  return { name, mood, message }
+  return { name, message }
 }
 
 module.exports = { sanitizeBookingPayload, sanitizeCommentPayload }

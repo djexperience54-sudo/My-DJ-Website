@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
 import { apiUrl } from '../lib/api'
+import { getSupabaseClient } from '../lib/supabaseClient'
 
 const initialForm = {
-  name: '',
-  mood: 'good',
   message: ''
 }
 
@@ -17,12 +16,17 @@ function CommentSection() {
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [profile, setProfile] = useState(null)
 
   useEffect(() => {
     fetch(apiUrl('/api/comments'))
       .then((response) => response.ok ? response.json() : Promise.reject(new Error('Comments could not be loaded.')))
       .then((result) => setComments(result.data || []))
       .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    getSupabaseClient().auth.getSession().then(({ data }) => setProfile(data.session ?? null)).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -50,7 +54,7 @@ function CommentSection() {
     try {
       const response = await fetch(apiUrl('/api/comments'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(profile ? { Authorization: `Bearer ${profile.access_token}` } : {}) },
         body: JSON.stringify(commentForm),
         signal: controller.signal
       })
@@ -107,7 +111,7 @@ function CommentSection() {
     if (!message.trim()) return
     const response = await fetch(apiUrl(`/api/comments/${commentId}/replies`), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...(profile ? { Authorization: `Bearer ${profile.access_token}` } : {}) },
       body: JSON.stringify({ message })
     })
     const result = await response.json().catch(() => ({}))
@@ -140,24 +144,13 @@ function CommentSection() {
           </div>
           <form className="comment-form" onSubmit={handleSubmit}>
             <div className="comment-composer-row">
-              <div className="comment-avatar" aria-hidden="true">G</div>
+              <div className="comment-avatar" aria-hidden="true">{profile?.user_metadata?.avatar_url ? <img src={profile.user_metadata.avatar_url} alt="" /> : (profile?.user_metadata?.full_name || profile?.email || 'Guest').charAt(0).toUpperCase()}</div>
               <div className="comment-composer-fields">
-                <label>
-                  Name
-                  <input name="name" value={form.name} onChange={handleChange} placeholder="Your name" maxLength="80" required />
-                </label>
                 <textarea name="message" value={form.message} onChange={handleChange} rows="3" placeholder="Join the conversation..." required />
               </div>
             </div>
             <div className="comment-composer-footer">
-              <label className="mood-control">
-                Mood
-                <select name="mood" value={form.mood} onChange={handleChange}>
-                  <option value="good">Feeling it</option>
-                  <option value="neutral">Just listening</option>
-                  <option value="bad">Not my vibe</option>
-                </select>
-              </label>
+              <span className="comment-identity-note">{profile ? `Commenting as ${profile.user_metadata?.full_name || profile.email}` : 'Posting as Guest'}</span>
               <button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? 'Posting...' : 'Post comment'}
               </button>
@@ -180,10 +173,9 @@ function CommentSection() {
             {sortedComments.length === 0 && <p className="empty-comments">No comments yet. Be the first to share your experience.</p>}
             {sortedComments.map((comment) => (
               <article id={`comment-${comment.id}`} key={comment.id} className="public-comment">
-                <div className="comment-avatar comment-avatar--small" aria-hidden="true">{comment.name.charAt(0).toUpperCase()}</div>
+                <div className="comment-avatar comment-avatar--small" aria-hidden="true">{comment.avatar_url ? <img src={comment.avatar_url} alt="" /> : comment.name.charAt(0).toUpperCase()}</div>
                 <div className="comment-body">
                   <div className="comment-author-line"><strong>{comment.name}</strong><span>{new Date(comment.created_at).toLocaleDateString()}</span></div>
-                  <span className="comment-mood">{comment.mood}</span>
                   <p>{comment.message}</p>
                   <div className="comment-actions">
                     <button type="button" onClick={() => handleLike(comment.id)}>Like <span>{comment.likes || 0}</span></button>

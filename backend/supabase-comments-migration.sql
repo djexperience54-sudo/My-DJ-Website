@@ -14,7 +14,9 @@ alter table public.comments add column if not exists email text;
 update public.comments set email = 'unknown@example.com' where email is null;
 alter table public.comments alter column email set not null;
 alter table public.comments alter column email drop not null;
+alter table public.comments alter column mood drop not null;
 alter table public.comments add column if not exists likes integer not null default 0;
+alter table public.comments add column if not exists avatar_url text;
 
 create table if not exists public.comment_likes (
   comment_id bigint not null references public.comments(id) on delete cascade,
@@ -36,6 +38,7 @@ create table if not exists public.comment_replies (
 
 alter table public.comment_replies enable row level security;
 alter table public.comment_replies alter column user_id drop not null;
+alter table public.comment_replies add column if not exists avatar_url text;
 
 create table if not exists public.email_verifications (
   token uuid primary key,

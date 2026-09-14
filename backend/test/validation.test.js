@@ -30,12 +30,10 @@ test('sanitizeBookingPayload rejects invalid email addresses', () => {
 test('sanitizeCommentPayload accepts valid comment data', () => {
   const result = sanitizeCommentPayload({
     name: 'DJ fan',
-    mood: 'good',
     message: 'The mix had great energy and the transitions were smooth.'
   })
 
   assert.equal(result.name, 'DJ fan')
-  assert.equal(result.mood, 'good')
   assert.match(result.message, /great energy/i)
 })
 
@@ -43,7 +41,6 @@ test('sanitizeCommentPayload rejects empty messages', () => {
   assert.throws(() => {
     sanitizeCommentPayload({
       name: 'Fan',
-      mood: 'good',
       message: ''
     })
   }, /message/i)
