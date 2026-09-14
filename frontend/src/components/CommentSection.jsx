@@ -13,6 +13,7 @@ function CommentSection() {
   const [form, setForm] = useState(initialForm)
   const [comments, setComments] = useState([])
   const [replies, setReplies] = useState({})
+  const [sortMode, setSortMode] = useState('best')
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -92,6 +93,16 @@ function CommentSection() {
     setComments((currentComments) => currentComments.map((comment) => comment.id === commentId ? { ...comment, likes: result.data.likes } : comment))
   }
 
+  async function handleShare(commentId) {
+    const shareUrl = `${window.location.origin}/#comment-${commentId}`
+    try {
+      await navigator.clipboard?.writeText(shareUrl)
+      setError('Comment link copied.')
+    } catch {
+      setError('Copy the page link to share this comment.')
+    }
+  }
+
   async function handleReply(commentId, message) {
     if (!message.trim()) return
     const response = await fetch(apiUrl(`/api/comments/${commentId}/replies`), {
@@ -107,32 +118,51 @@ function CommentSection() {
     setReplies((currentReplies) => ({ ...currentReplies, [commentId]: [...(currentReplies[commentId] || []), result.data] }))
   }
 
+  const sortedComments = [...comments].sort((first, second) => {
+    if (sortMode === 'newest') return new Date(second.created_at) - new Date(first.created_at)
+    if (sortMode === 'oldest') return new Date(first.created_at) - new Date(second.created_at)
+    return (second.likes || 0) - (first.likes || 0) || new Date(second.created_at) - new Date(first.created_at)
+  })
+
   return (
     <section className="comment-section" aria-labelledby="comments-title">
       <div className="site-container comment-layout">
         <div className="comment-introduction">
           <p className="eyebrow">Listener feedback</p>
-          <h2 id="comments-title">Tell us what you felt.</h2>
+          <h2 id="comments-title">The conversation</h2>
+          <p>Share the moment, react to the sound, and keep the conversation moving.</p>
         </div>
 
-        <form className="comment-form" onSubmit={handleSubmit}>
-          <label>
-            How did it feel?
-            <select name="mood" value={form.mood} onChange={handleChange}>
-              <option value="good">Good</option>
-              <option value="neutral">Neutral</option>
-              <option value="bad">Bad</option>
-            </select>
-          </label>
-
-          <label className="comment-field-label">
-            Comment
-            <textarea name="message" value={form.message} onChange={handleChange} rows="4" placeholder="Tell us about the mixtape, the vibe, or the night..." required />
-          </label>
-
-          <button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Posting...' : 'Send comment'}
-          </button>
+        <div className="discussion-panel">
+          <div className="discussion-heading">
+            <h3>{comments.length} Comment{comments.length === 1 ? '' : 's'}</h3>
+            <span className="discussion-badge">INT&apos;L DJ EXPERIENCE</span>
+          </div>
+          <form className="comment-form" onSubmit={handleSubmit}>
+            <div className="comment-composer-row">
+              <div className="comment-avatar" aria-hidden="true">G</div>
+              <div className="comment-composer-fields">
+                <label>
+                  Name
+                  <input name="name" value={form.name} onChange={handleChange} placeholder="Your name" maxLength="80" required />
+                </label>
+                <textarea name="message" value={form.message} onChange={handleChange} rows="3" placeholder="Join the conversation..." required />
+              </div>
+            </div>
+            <div className="comment-composer-footer">
+              <label className="mood-control">
+                Mood
+                <select name="mood" value={form.mood} onChange={handleChange}>
+                  <option value="good">Feeling it</option>
+                  <option value="neutral">Just listening</option>
+                  <option value="bad">Not my vibe</option>
+                </select>
+              </label>
+              <button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Posting...' : 'Post comment'}
+              </button>
+            </div>
+          </form>
 
           {submitted && (
             <p className="form-status" role="status">
@@ -140,20 +170,32 @@ function CommentSection() {
             </p>
           )}
           {error && <p className="form-error" role="alert">{error}</p>}
-        </form>
-        <div className="public-comments" aria-live="polite">
-          <h3>What listeners are saying</h3>
-          {comments.length === 0 && <p>No comments yet. Be the first to share your experience.</p>}
-          {comments.map((comment) => (
-            <article key={comment.id} className="public-comment">
-              <strong>{comment.name}</strong>
-              <span>{comment.mood}</span>
-              <p>{comment.message}</p>
-              <button type="button" className="comment-like-button" onClick={() => handleLike(comment.id)}>Like ({comment.likes || 0})</button>
-              {(replies[comment.id] || []).map((reply) => <p className="public-reply" key={reply.id}><strong>{reply.name}:</strong> {reply.message}</p>)}
-              <form className="comment-reply-form" onSubmit={(event) => { event.preventDefault(); handleReply(comment.id, event.currentTarget.elements.reply.value); event.currentTarget.reset() }}><input name="reply" placeholder="Write a reply" maxLength="1000" required /><button type="submit">Reply</button></form>
-            </article>
-          ))}
+          <div className="discussion-toolbar">
+            <strong>{comments.length} voices</strong>
+            <div className="comment-sort-tabs" role="tablist" aria-label="Sort comments">
+              {['best', 'newest', 'oldest'].map((mode) => <button key={mode} className={sortMode === mode ? 'is-active' : ''} type="button" role="tab" aria-selected={sortMode === mode} onClick={() => setSortMode(mode)}>{mode}</button>)}
+            </div>
+          </div>
+          <div className="public-comments" aria-live="polite">
+            {sortedComments.length === 0 && <p className="empty-comments">No comments yet. Be the first to share your experience.</p>}
+            {sortedComments.map((comment) => (
+              <article id={`comment-${comment.id}`} key={comment.id} className="public-comment">
+                <div className="comment-avatar comment-avatar--small" aria-hidden="true">{comment.name.charAt(0).toUpperCase()}</div>
+                <div className="comment-body">
+                  <div className="comment-author-line"><strong>{comment.name}</strong><span>{new Date(comment.created_at).toLocaleDateString()}</span></div>
+                  <span className="comment-mood">{comment.mood}</span>
+                  <p>{comment.message}</p>
+                  <div className="comment-actions">
+                    <button type="button" onClick={() => handleLike(comment.id)}>Like <span>{comment.likes || 0}</span></button>
+                    <button type="button" onClick={() => document.getElementById(`reply-${comment.id}`)?.focus()}>Reply</button>
+                    <button type="button" onClick={() => handleShare(comment.id)}>Share</button>
+                  </div>
+                  {(replies[comment.id] || []).map((reply) => <p className="public-reply" key={reply.id}><strong>{reply.name}:</strong> {reply.message}</p>)}
+                  <form className="comment-reply-form" onSubmit={(event) => { event.preventDefault(); handleReply(comment.id, event.currentTarget.elements.reply.value); event.currentTarget.reset() }}><input id={`reply-${comment.id}`} name="reply" placeholder="Write a reply" maxLength="1000" required /><button type="submit">Reply</button></form>
+                </div>
+              </article>
+            ))}
+          </div>
         </div>
       </div>
     </section>
