@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { apiUrl } from '../lib/api'
 import { getSupabaseClient } from '../lib/supabaseClient'
 
@@ -15,9 +15,13 @@ function CommentSection() {
   const [comments, setComments] = useState([])
   const [replies, setReplies] = useState({})
   const [user, setUser] = useState(null)
+  const [session, setSession] = useState(null)
+  const [isAuthReady, setIsAuthReady] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const submitCommentRef = useRef(null)
+  const hasResumedPendingComment = useRef(false)
 
   useEffect(() => {
     fetch(apiUrl('/api/comments'))
@@ -36,8 +40,32 @@ function CommentSection() {
   }, [comments])
 
   useEffect(() => {
+    const supabase = getSupabaseClient()
+    let isMounted = true
+
+    supabase.auth.getSession().then(({ data }) => {
+      if (!isMounted) return
+      setSession(data.session ?? null)
+      setUser(data.session?.user ?? null)
+      setIsAuthReady(true)
+    })
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      if (!isMounted) return
+      setSession(nextSession ?? null)
+      setUser(nextSession?.user ?? null)
+      setIsAuthReady(true)
+    })
+
+    return () => {
+      isMounted = false
+      listener.subscription.unsubscribe()
+    }
+  }, [])
+
+  useEffect(() => {
     const savedComment = window.localStorage.getItem('pending-comment')
-    if (!user || !savedComment) return
+    if (!isAuthReady || !session || !savedComment || isSubmitting || hasResumedPendingComment.current) return
 
     let pendingComment
     try {
@@ -46,15 +74,10 @@ function CommentSection() {
       window.localStorage.removeItem('pending-comment')
       return
     }
-    window.localStorage.removeItem('pending-comment')
-    setTimeout(() => submitComment(pendingComment), 0)
-  }, [user])
-  useEffect(() => {
-    const supabase = getSupabaseClient()
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null))
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null))
-    return () => listener.subscription.unsubscribe()
-  }, [])
+
+    hasResumedPendingComment.current = true
+    setTimeout(() => submitCommentRef.current?.(pendingComment, session.access_token), 0)
+  }, [isAuthReady, session, isSubmitting])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -71,13 +94,11 @@ function CommentSection() {
     if (signInError) setError('We could not connect your account. Please try again.')
   }
 
-  async function submitComment(commentForm) {
+  async function submitComment(commentForm, accessToken = session?.access_token) {
     setIsSubmitting(true)
     setError('')
-    const { data: sessionData } = await getSupabaseClient().auth.getSession()
-    const accessToken = sessionData.session?.access_token
     if (!accessToken) {
-      setError('Your account session expired. Please try again.')
+      setError('Your account session is not ready yet. Please try again.')
       setIsSubmitting(false)
       return
     }
@@ -101,6 +122,7 @@ function CommentSection() {
       setSubmitted(true)
       setComments((currentComments) => [result.data, ...currentComments])
       setForm(initialForm)
+      window.localStorage.removeItem('pending-comment')
     } catch (submissionError) {
       setError(submissionError.name === 'AbortError' ? 'The server took too long to respond. Please try again.' : submissionError.message)
     } finally {
@@ -109,18 +131,22 @@ function CommentSection() {
     }
   }
 
+  useEffect(() => {
+    submitCommentRef.current = submitComment
+  })
+
   async function handleSubmit(event) {
     event.preventDefault()
 
     if (!event.currentTarget.checkValidity()) return
 
-    if (!user) {
+    if (!session) {
       window.localStorage.setItem('pending-comment', JSON.stringify(form))
       await signInWithGoogle()
       return
     }
 
-    await submitComment(form, user)
+    await submitComment(form, session.access_token)
   }
 
   async function handleLike(commentId) {
