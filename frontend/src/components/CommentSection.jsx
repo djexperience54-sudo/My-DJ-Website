@@ -43,11 +43,26 @@ function CommentSection() {
     const supabase = getSupabaseClient()
     let isMounted = true
 
-    supabase.auth.getSession().then(({ data }) => {
+    async function restoreSession() {
+      let currentSession
+      const { data: sessionData } = await supabase.auth.getSession()
+      currentSession = sessionData.session
+
+      const callbackCode = new URLSearchParams(window.location.search).get('code')
+      if (!currentSession && callbackCode) {
+        const { data: exchangeData } = await supabase.auth.exchangeCodeForSession(callbackCode)
+        currentSession = exchangeData.session
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash)
+      }
+
       if (!isMounted) return
-      setSession(data.session ?? null)
-      setUser(data.session?.user ?? null)
+      setSession(currentSession ?? null)
+      setUser(currentSession?.user ?? null)
       setIsAuthReady(true)
+    }
+
+    restoreSession().catch(() => {
+      if (isMounted) setIsAuthReady(true)
     })
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
