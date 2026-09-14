@@ -30,7 +30,7 @@ function sanitizeBookingPayload(payload = {}) {
 }
 
 function sanitizeCommentPayload(payload = {}) {
-  const name = normalizeText(payload.name || 'Guest', 'Name', 120)
+  const name = normalizeText(payload.name || 'Anonymous', 'Name', 120)
   const message = normalizeText(payload.message, 'Message', 1000)
   return { name, message }
 }

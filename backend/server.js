@@ -189,7 +189,7 @@ app.post('/api/comments', asyncRoute(async (request, response) => {
     const accessToken = (request.headers.authorization || '').startsWith('Bearer ') ? request.headers.authorization.slice(7) : ''
     const user = accessToken ? await getAuthenticatedUser(accessToken) : null
     const metadata = user?.user_metadata || {}
-    const payload = sanitizeCommentPayload({ ...request.body, name: metadata.full_name || metadata.name || user?.email?.split('@')[0] || 'Guest' })
+    const payload = sanitizeCommentPayload({ ...request.body, name: metadata.full_name || metadata.name || user?.email?.split('@')[0] || 'Anonymous' })
     const comment = await createComment({ ...payload, email: user?.email || null, avatar_url: metadata.avatar_url || null })
 
     sendCommentEmail({
@@ -237,7 +237,7 @@ app.post('/api/comments/:id/replies', asyncRoute(async (request, response) => {
   const accessToken = (request.headers.authorization || '').startsWith('Bearer ') ? request.headers.authorization.slice(7) : ''
   const user = accessToken ? await getAuthenticatedUser(accessToken) : null
   const metadata = user?.user_metadata || {}
-  response.status(201).json({ data: await createCommentReply({ comment_id: Number(request.params.id), name: metadata.full_name || metadata.name || user?.email?.split('@')[0] || 'Guest', avatar_url: metadata.avatar_url || null, message }) })
+  response.status(201).json({ data: await createCommentReply({ comment_id: Number(request.params.id), name: metadata.full_name || metadata.name || user?.email?.split('@')[0] || 'Anonymous', avatar_url: metadata.avatar_url || null, message }) })
 }))
 
 app.post('/api/media/signature', asyncRoute(async (request, response) => {

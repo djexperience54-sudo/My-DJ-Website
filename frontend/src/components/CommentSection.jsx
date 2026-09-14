@@ -150,7 +150,7 @@ function CommentSection() {
               </div>
             </div>
             <div className="comment-composer-footer">
-              <span className="comment-identity-note">{profile ? `Commenting as ${profile.user_metadata?.full_name || profile.email}` : 'Posting as Guest'}</span>
+              <span className="comment-identity-note">{profile ? `Commenting as ${profile.user_metadata?.full_name || profile.email}` : 'Posting as Anonymous'}</span>
               <button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? 'Posting...' : 'Post comment'}
               </button>
@@ -173,16 +173,16 @@ function CommentSection() {
             {sortedComments.length === 0 && <p className="empty-comments">No comments yet. Be the first to share your experience.</p>}
             {sortedComments.map((comment) => (
               <article id={`comment-${comment.id}`} key={comment.id} className="public-comment">
-                <div className="comment-avatar comment-avatar--small" aria-hidden="true">{comment.avatar_url ? <img src={comment.avatar_url} alt="" /> : comment.name.charAt(0).toUpperCase()}</div>
+                <div className="comment-avatar comment-avatar--small" aria-hidden="true">{comment.avatar_url ? <img src={comment.avatar_url} alt="" /> : (comment.name === 'Guest' || comment.name === 'Listener' ? 'A' : comment.name.charAt(0).toUpperCase())}</div>
                 <div className="comment-body">
-                  <div className="comment-author-line"><strong>{comment.name}</strong><span>{new Date(comment.created_at).toLocaleDateString()}</span></div>
+                  <div className="comment-author-line"><strong>{comment.name === 'Guest' || comment.name === 'Listener' ? 'Anonymous' : comment.name}</strong><span>{new Date(comment.created_at).toLocaleDateString()}</span></div>
                   <p>{comment.message}</p>
                   <div className="comment-actions">
                     <button type="button" onClick={() => handleLike(comment.id)}>Like <span>{comment.likes || 0}</span></button>
                     <button type="button" onClick={() => document.getElementById(`reply-${comment.id}`)?.focus()}>Reply</button>
                     <button type="button" onClick={() => handleShare(comment.id)}>Share</button>
                   </div>
-                  {(replies[comment.id] || []).map((reply) => <p className="public-reply" key={reply.id}><strong>{reply.name}:</strong> {reply.message}</p>)}
+                  {(replies[comment.id] || []).map((reply) => <p className="public-reply" key={reply.id}><strong>{reply.name === 'Listener' ? 'Anonymous' : reply.name}:</strong> {reply.message}</p>)}
                   <form className="comment-reply-form" onSubmit={(event) => { event.preventDefault(); handleReply(comment.id, event.currentTarget.elements.reply.value); event.currentTarget.reset() }}><input id={`reply-${comment.id}`} name="reply" placeholder="Write a reply" maxLength="1000" required /><button type="submit">Reply</button></form>
                 </div>
               </article>
